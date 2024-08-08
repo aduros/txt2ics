@@ -12,7 +12,7 @@ program
   .description(
     'Transform plain text to an .ics file using GPT.\n\nMore info: https://github.com/aduros/txt2ics',
   )
-  .option('-m, --model <model>', 'OpenAI model to use', 'gpt-4o-mini')
+  .option('-m, --model <model>', 'OpenAI model to use', 'gpt-4o')
   .option('-o, --output <file>', 'Output file, or "-" to write to stdout', '-')
   .argument('[file]', 'Input text file, or "-" to read from stdin', '-')
 

@@ -33,28 +33,32 @@ export async function textToIcs(
       .array(
         z.object({
           title: z.string().describe('The title of the event'),
-          description: z
-            .string()
-            .optional()
-            .describe('Any extra information about the event'),
+
           timeStart: z.string().describe('The starting datetime of the event'),
+
           timeEnd: z
             .string()
             .optional()
-            .describe('The end datetime of the event'),
-          allDay: z
-            .boolean()
-            .optional()
-            .describe(
-              'True if the event does not start or end at a specific time and occurs all day on the dates given',
-            ),
-          location: z.string().optional().describe('The event location'),
+            .describe('If provided, the ending datetime of the event'),
+
           recurrenceRule: z
             .string()
             .optional()
             .describe(
-              'For recurring events, the repeating rule string in iCalendar RRULE format',
+              'If this is a recurring event, the repeating rule string in iCalendar RRULE format',
             ),
+
+          description: z
+            .string()
+            .optional()
+            .describe('Any extra information about the event'),
+
+          location: z.string().optional().describe('The event location'),
+
+          emoji: z
+            .string()
+            .optional()
+            .describe('A single emoji that best describes this event'),
         }),
       )
       .describe('Only include a single item for each event'),
@@ -64,8 +68,7 @@ export async function textToIcs(
     messages: [
       {
         role: 'system',
-        // content: `Extract calendar events from the given text. The current datetime: ${new Date().toISOString()}`,
-        content: `Extract calendar events from the given text`,
+        content: `Extract calendar events from the given text. Datetimes should be converted to iCalendar DATETIME format if a time was provided, otherwise just a DATE without a time.`,
       },
       {
         role: 'user',
@@ -111,7 +114,7 @@ export async function textToIcs(
     console.log(JSON.stringify(result.events, null, '  '))
   }
 
-  const creationTime = toIcsDate(new Date().toISOString(), false)
+  const creationTime = toIcsDateTime(new Date())
 
   const ics = [
     'BEGIN:VCALENDAR',
@@ -121,13 +124,13 @@ export async function textToIcs(
       .map((event) => {
         const lines = [
           'BEGIN:VEVENT',
-          `UID:${randomId()}`,
-          `SUMMARY:${oneLine(event.title)}`,
+          `UID:${randomId()}`, // TODO(2024-08-08): Generate a hash of this event?
+          `SUMMARY:${oneLine(event.title)}${event.emoji ? ' ' + event.emoji : ''}`,
           `DTSTAMP:${creationTime}`,
-          `DTSTART:${toIcsDate(event.timeStart, event.allDay)}`,
+          `DTSTART:${event.timeStart.replace(/^DTSTART:/, '')}`,
         ]
         if (event.timeEnd) {
-          lines.push(`DTEND:${toIcsDate(event.timeEnd, event.allDay)}`)
+          lines.push(`DTEND:${event.timeEnd.replace(/^DTEND:/, '')}`)
         }
         if (event.location) {
           lines.push(`LOCATION:${oneLine(event.location)}`)
@@ -168,20 +171,12 @@ function pad(i: number) {
   return i < 10 ? `0${i}` : i
 }
 
-function toIcsDate(dateString: string, ignoreTime: boolean | undefined) {
-  const timestamp = Date.parse(dateString)
-  if (isNaN(timestamp)) {
-    throw new Error(`Invalid date: ${dateString}`)
-  }
-
-  const date = new Date(timestamp)
+function toIcsDateTime(date: Date) {
   const year = date.getFullYear()
   const month = pad(date.getMonth() + 1)
   const day = pad(date.getDate())
   const hour = pad(date.getHours())
   const minute = pad(date.getMinutes())
   const second = pad(date.getSeconds())
-
-  const timeSuffix = ignoreTime ? '' : `T${hour}${minute}${second}`
-  return `${year}${month}${day}${timeSuffix}`
+  return `${year}${month}${day}T${hour}${minute}${second}`
 }
