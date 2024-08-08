@@ -46,39 +46,14 @@ export async function textToIcs(
             .boolean()
             .optional()
             .describe(
-              'True if the event does not have a specific time and occurs all day on the dates given',
+              'True if the event does not start or end at a specific time and occurs all day on the dates given',
             ),
           location: z.string().optional().describe('The event location'),
-          recurTimeUnit: z
-            .enum([
-              'minutely',
-              'hourly',
-              'daily',
-              'weekly',
-              'monthly',
-              'yearly',
-            ])
-            .optional()
-            .describe(
-              'For recurring events, the unit of frequency of the recurrence',
-            ),
-          recurInterval: z
-            .number()
-            .optional()
-            .describe(
-              'For recurring events, the number of time units between recurrences',
-            ),
-          // recurWeekDays: z
-          //   .array(z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']))
-          //   .optional()
-          //   .describe(
-          //     'For recurring events, the days of the week the event should recur on',
-          //   ),
-          recurUntilTime: z
+          recurrenceRule: z
             .string()
             .optional()
             .describe(
-              'For recurring events, the datetime until the event stops recurring',
+              'For recurring events, the repeating rule string in iCalendar RRULE format',
             ),
         }),
       )
@@ -157,18 +132,11 @@ export async function textToIcs(
         if (event.location) {
           lines.push(`LOCATION:${oneLine(event.location)}`)
         }
-        if (event.description) {
+        if (event.description && event.description !== event.title) {
           lines.push(`DESCRIPTION:${oneLine(event.description)}`)
         }
-        if (event.recurTimeUnit) {
-          let rrule = `RRULE:FREQ=${event.recurTimeUnit.toUpperCase()}`
-          if (event.recurInterval !== undefined && event.recurInterval > 1) {
-            rrule += `INTERVAL=${event.recurInterval}`
-          }
-          if (event.recurUntilTime) {
-            rrule += `UNTIL=${toIcsDate(event.recurUntilTime, event.allDay)}`
-          }
-          lines.push(rrule)
+        if (event.recurrenceRule) {
+          lines.push(`RRULE:${event.recurrenceRule.replace(/^RRULE:/, '')}`)
         }
         lines.push('END:VEVENT')
         return lines.join('\n')
@@ -207,13 +175,13 @@ function toIcsDate(dateString: string, ignoreTime: boolean | undefined) {
   }
 
   const date = new Date(timestamp)
-  const year = date.getUTCFullYear()
-  const month = pad(date.getUTCMonth() + 1)
-  const day = pad(date.getUTCDate())
+  const year = date.getFullYear()
+  const month = pad(date.getMonth() + 1)
+  const day = pad(date.getDate())
+  const hour = pad(date.getHours())
+  const minute = pad(date.getMinutes())
+  const second = pad(date.getSeconds())
 
-  const hour = pad(date.getUTCHours())
-  const minute = pad(date.getUTCMinutes())
-  const second = pad(date.getUTCSeconds())
   const timeSuffix = ignoreTime ? '' : `T${hour}${minute}${second}`
   return `${year}${month}${day}${timeSuffix}`
 }
