@@ -1,4 +1,5 @@
 import { ICalCalendar } from 'ical-generator'
+import { hash } from 'ohash'
 import type { OpenAI } from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import {
@@ -79,6 +80,7 @@ export async function textToIcs(
   const chatCompletion = await opts.openai.beta.chat.completions.parse({
     model: opts.model,
     temperature: 0,
+    seed: 0,
     messages: [
       {
         role: 'system',
@@ -121,8 +123,18 @@ export async function textToIcs(
     },
   })
 
+  // The number of times we've processed each event, keyed by hash
+  const eventCounts = new Map<string, number>()
+
   for (const event of result.events) {
+    // Use the hash of this event to form its ID instead of randomizing to keep IDs stable
+    // as possible between separate runs
+    const eventHash = hash(event)
+    const eventCount = eventCounts.get(eventHash) ?? 0
+    eventCounts.set(eventHash, eventCount + 1)
+
     calendar.createEvent({
+      id: `${eventHash}-${eventCount}`,
       start: event.timeStart,
       end: event.timeEnd,
       summary: `${event.title}${event.emoji ? ` ${event.emoji}` : ''}`,
