@@ -1,12 +1,11 @@
 import { ICalCalendar } from 'ical-generator'
-import JSON5 from 'json5'
 import type { OpenAI } from 'openai'
+import { zodResponseFormat } from 'openai/helpers/zod'
 import {
   tzlib_get_ical_block,
   tzlib_get_timezones,
 } from 'timezones-ical-library'
 import { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
 
 export interface TextToIcsOptions {
   /** The source text. */
@@ -35,7 +34,7 @@ export interface TextToIcsResult {
 export async function textToIcs(
   opts: TextToIcsOptions,
 ): Promise<TextToIcsResult> {
-  const parametersSchema = z.object({
+  const resultSchema = z.object({
     events: z.array(
       z.object({
         title: z.string().describe('The title of the event'),
@@ -43,45 +42,43 @@ export async function textToIcs(
         timeStart: z.string().describe('The starting datetime of the event'),
 
         timeEnd: z
-          .string()
-          .optional()
+          .union([z.string(), z.null()])
           .describe('If provided, the ending datetime of the event'),
 
         timeZone: z
-          .string()
-          .optional()
+          .union([z.string(), z.null()])
           .describe('If provided, the timezone ID for this event'),
 
         allDay: z
           .boolean()
-          .optional()
           .describe(
             'True if the event has no specific time of day, and can occur all day or at any time of day',
           ),
 
         recurrenceRule: z
-          .string()
-          .optional()
+          .union([z.string(), z.null()])
           .describe(
             'If this is a recurring event, the repeating rule string in iCalendar RRULE format',
           ),
 
         description: z
-          .string()
-          .optional()
+          .union([z.string(), z.null()])
           .describe('Any extra information about the event'),
 
-        location: z.string().optional().describe('The event location'),
+        location: z
+          .union([z.string(), z.null()])
+          .describe('The event location'),
 
         emoji: z
-          .string()
-          .optional()
+          .union([z.string(), z.null()])
           .describe('A single emoji that best describes this event'),
       }),
     ),
   })
 
-  const chatCompletion = await opts.openai.chat.completions.create({
+  const chatCompletion = await opts.openai.beta.chat.completions.parse({
+    model: opts.model,
+    temperature: 0,
     messages: [
       {
         role: 'system',
@@ -97,38 +94,17 @@ export async function textToIcs(
         ],
       },
     ],
-    temperature: 0,
-    tools: [
-      {
-        type: 'function',
-        function: {
-          name: 'onComplete',
-          parameters: zodToJsonSchema(parametersSchema),
-        },
-      },
-    ],
-    tool_choice: {
-      type: 'function',
-      function: {
-        name: 'onComplete',
-      },
-    },
-    model: opts.model,
+    response_format: zodResponseFormat(resultSchema, 'result'),
   })
 
-  const toolCall = chatCompletion.choices[0]?.message?.tool_calls?.[0]
-
-  if (!toolCall || toolCall.function.name !== 'onComplete') {
-    throw new Error('Invalid tool call')
+  const message = chatCompletion.choices[0].message
+  const result = message.parsed
+  if (!result) {
+    throw new Error(`Invalid response: ${message.refusal ?? 'unknown reason'}`)
   }
 
-  const result = parametersSchema.parse(
-    // We use JSON5 here because sometimes OpenAI returns invalid JSON
-    JSON5.parse(toolCall.function.arguments),
-  )
-
   if (process.env.TXT2ICS_DEBUG) {
-    console.log(JSON.stringify(result.events, null, '  '))
+    console.log(JSON.stringify(result, null, '  '))
   }
 
   const validTimeZones = new Set(tzlib_get_timezones())

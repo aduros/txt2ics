@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsup src/index.ts src/cli.ts --format esm --sourcemap --dts",
     "prepack": "npm run build -- --clean",
-    "prepare": "husky install",
+    "prepare": "husky",
     "release": "bump --commit --tag --push",
     "start": "npm run build -- --watch",
     "test": "jest",
@@ -45,10 +45,8 @@
   },
   "dependencies": {
     "commander": "^12.1.0",
-    "json5": "^2.2.3",
     "timezones-ical-library": "^1.8.3",
-    "zod": "^3.23.8",
-    "zod-to-json-schema": "^3.23.2"
+    "zod": "^3.23.8"
   },
   "peerDependencies": {
     "ical-generator": "^7.2.0",
