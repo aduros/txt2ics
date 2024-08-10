@@ -1,6 +1,6 @@
 import { ICalCalendar } from 'ical-generator'
 import { hash } from 'ohash'
-import type { OpenAI } from 'openai'
+import { OpenAI } from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import {
   tzlib_get_ical_block,
@@ -8,21 +8,21 @@ import {
 } from 'timezones-ical-library'
 import { z } from 'zod'
 
-export interface TextToIcsOptions {
+export interface TextToCalendarOptions {
   /** The source text. */
   text: string
 
-  /** OpenAI client. */
-  openai: OpenAI
-
   /** OpenAI model. */
   model: string
+
+  /** OpenAI client. */
+  openai?: OpenAI
 
   /** Default timezone to use for events. */
   defaultTimeZone?: string
 }
 
-export interface TextToIcsResult {
+export interface TextToCalendarResult {
   calendar: ICalCalendar
 }
 
@@ -32,9 +32,9 @@ export interface TextToIcsResult {
  * @param opts Options
  * @returns The result
  */
-export async function textToIcs(
-  opts: TextToIcsOptions,
-): Promise<TextToIcsResult> {
+export async function textToCalendar(
+  opts: TextToCalendarOptions,
+): Promise<TextToCalendarResult> {
   const resultSchema = z.object({
     events: z.array(
       z.object({
@@ -77,7 +77,8 @@ export async function textToIcs(
     ),
   })
 
-  const chatCompletion = await opts.openai.beta.chat.completions.parse({
+  const openai = opts.openai ?? new OpenAI()
+  const chatCompletion = await openai.beta.chat.completions.parse({
     model: opts.model,
     temperature: 0,
     seed: 0,
@@ -144,6 +145,9 @@ export async function textToIcs(
       repeating: event.recurrenceRule,
       allDay: event.allDay,
       timezone: event.timeZone ?? opts.defaultTimeZone,
+
+      // Use a fixed TSTAMP when running in Jest to keep things testable
+      stamp: process.env.NODE_ENV === 'test' ? new Date(0) : undefined,
     })
   }
 

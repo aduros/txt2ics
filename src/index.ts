@@ -1,2 +1,5 @@
-export { textToIcs } from './txt2ics'
-export type { TextToIcsOptions, TextToIcsResult } from './txt2ics'
+export { textToCalendar } from './textToCalendar'
+export type {
+  TextToCalendarOptions,
+  TextToCalendarResult,
+} from './textToCalendar'

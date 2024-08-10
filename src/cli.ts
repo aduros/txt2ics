@@ -5,9 +5,8 @@ import { basename } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
 
 import { program } from 'commander'
-import OpenAI from 'openai'
 
-import { textToIcs } from './txt2ics'
+import { textToCalendar } from './textToCalendar'
 
 program
   .name('txt2ics')
@@ -27,7 +26,6 @@ program
       },
     ) => {
       const { model } = opts
-      const openai = new OpenAI()
 
       const inStream: Readable =
         file === '-' ? process.stdin : createReadStream(file)
@@ -37,9 +35,8 @@ program
         text += String(chunk)
       }
 
-      const { calendar } = await textToIcs({
+      const { calendar } = await textToCalendar({
         text,
-        openai,
         model,
         defaultTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       })
