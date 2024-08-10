@@ -1,5 +1,10 @@
+import { ICalCalendar } from 'ical-generator'
 import JSON5 from 'json5'
 import type { OpenAI } from 'openai'
+import {
+  tzlib_get_ical_block,
+  tzlib_get_timezones,
+} from 'timezones-ical-library'
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
@@ -12,11 +17,13 @@ export interface TextToIcsOptions {
 
   /** OpenAI model. */
   model: string
+
+  /** Default timezone to use for events. */
+  defaultTimeZone?: string
 }
 
 export interface TextToIcsResult {
-  /** The .ics iCalendar file content. */
-  ics: string
+  calendar: ICalCalendar
 }
 
 /**
@@ -29,46 +36,56 @@ export async function textToIcs(
   opts: TextToIcsOptions,
 ): Promise<TextToIcsResult> {
   const parametersSchema = z.object({
-    events: z
-      .array(
-        z.object({
-          title: z.string().describe('The title of the event'),
+    events: z.array(
+      z.object({
+        title: z.string().describe('The title of the event'),
 
-          timeStart: z.string().describe('The starting datetime of the event'),
+        timeStart: z.string().describe('The starting datetime of the event'),
 
-          timeEnd: z
-            .string()
-            .optional()
-            .describe('If provided, the ending datetime of the event'),
+        timeEnd: z
+          .string()
+          .optional()
+          .describe('If provided, the ending datetime of the event'),
 
-          recurrenceRule: z
-            .string()
-            .optional()
-            .describe(
-              'If this is a recurring event, the repeating rule string in iCalendar RRULE format',
-            ),
+        timeZone: z
+          .string()
+          .optional()
+          .describe('If provided, the timezone ID for this event'),
 
-          description: z
-            .string()
-            .optional()
-            .describe('Any extra information about the event'),
+        allDay: z
+          .boolean()
+          .optional()
+          .describe(
+            'True if the event has no specific time of day, and can occur all day or at any time of day',
+          ),
 
-          location: z.string().optional().describe('The event location'),
+        recurrenceRule: z
+          .string()
+          .optional()
+          .describe(
+            'If this is a recurring event, the repeating rule string in iCalendar RRULE format',
+          ),
 
-          emoji: z
-            .string()
-            .optional()
-            .describe('A single emoji that best describes this event'),
-        }),
-      )
-      .describe('Only include a single item for each event'),
+        description: z
+          .string()
+          .optional()
+          .describe('Any extra information about the event'),
+
+        location: z.string().optional().describe('The event location'),
+
+        emoji: z
+          .string()
+          .optional()
+          .describe('A single emoji that best describes this event'),
+      }),
+    ),
   })
 
   const chatCompletion = await opts.openai.chat.completions.create({
     messages: [
       {
         role: 'system',
-        content: `Extract calendar events from the given text. Datetimes should be converted to iCalendar DATETIME format if a time was provided, otherwise just a DATE without a time.`,
+        content: 'Extract calendar events from the given text',
       },
       {
         role: 'user',
@@ -110,73 +127,37 @@ export async function textToIcs(
     JSON5.parse(toolCall.function.arguments),
   )
 
-  if (process.env.TXT2ICS_DEBUG === '1') {
+  if (process.env.TXT2ICS_DEBUG) {
     console.log(JSON.stringify(result.events, null, '  '))
   }
 
-  const creationTime = toIcsDateTime(new Date())
+  const validTimeZones = new Set(tzlib_get_timezones())
 
-  const ics = [
-    'BEGIN:VCALENDAR',
-    'PRODID:txt2ics',
-    'VERSION:2.0',
-    result.events
-      .map((event) => {
-        const lines = [
-          'BEGIN:VEVENT',
-          `UID:${randomId()}`, // TODO(2024-08-08): Generate a hash of this event?
-          `SUMMARY:${oneLine(event.title)}${event.emoji ? ' ' + event.emoji : ''}`,
-          `DTSTAMP:${creationTime}`,
-          `DTSTART:${event.timeStart.replace(/^DTSTART:/, '')}`,
-        ]
-        if (event.timeEnd) {
-          lines.push(`DTEND:${event.timeEnd.replace(/^DTEND:/, '')}`)
-        }
-        if (event.location) {
-          lines.push(`LOCATION:${oneLine(event.location)}`)
-        }
-        if (event.description && event.description !== event.title) {
-          lines.push(`DESCRIPTION:${oneLine(event.description)}`)
-        }
-        if (event.recurrenceRule) {
-          lines.push(`RRULE:${event.recurrenceRule.replace(/^RRULE:/, '')}`)
-        }
-        lines.push('END:VEVENT')
-        return lines.join('\n')
-      })
-      .join('\n'),
-    'END:VCALENDAR',
-  ].join('\n')
+  const calendar = new ICalCalendar({
+    prodId: 'txt2ics',
+    timezone: {
+      name: null,
+      generator: (tzName) => {
+        return validTimeZones.has(tzName)
+          ? tzlib_get_ical_block(tzName)[0]
+          : null
+      },
+    },
+  })
 
-  return {
-    ics,
+  for (const event of result.events) {
+    calendar.createEvent({
+      start: event.timeStart,
+      end: event.timeEnd,
+      summary: `${event.title}${event.emoji ? ` ${event.emoji}` : ''}`,
+      description:
+        event.description !== event.title ? event.description : undefined,
+      location: event.location,
+      repeating: event.recurrenceRule,
+      allDay: event.allDay,
+      timezone: event.timeZone ?? opts.defaultTimeZone,
+    })
   }
-}
 
-function oneLine(text: string) {
-  return text.split('\n')[0]
-}
-
-function randomId() {
-  const base62 =
-    '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-  let str = ''
-  for (let ii = 0; ii < 22; ++ii) {
-    str += base62.charAt((Math.random() * 62) >>> 0)
-  }
-  return str
-}
-
-function pad(i: number) {
-  return i < 10 ? `0${i}` : i
-}
-
-function toIcsDateTime(date: Date) {
-  const year = date.getFullYear()
-  const month = pad(date.getMonth() + 1)
-  const day = pad(date.getDate())
-  const hour = pad(date.getHours())
-  const minute = pad(date.getMinutes())
-  const second = pad(date.getSeconds())
-  return `${year}${month}${day}T${hour}${minute}${second}`
+  return { calendar }
 }

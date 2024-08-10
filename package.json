@@ -46,8 +46,12 @@
   "dependencies": {
     "commander": "^12.1.0",
     "json5": "^2.2.3",
-    "openai": "^4.55.3",
+    "timezones-ical-library": "^1.8.3",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.2"
+  },
+  "peerDependencies": {
+    "ical-generator": "^7.2.0",
+    "openai": "^4.55.4"
   }
 }

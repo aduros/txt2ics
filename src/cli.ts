@@ -1,6 +1,8 @@
 #!/usr/bin/env node --no-deprecation
 
 import { createReadStream, createWriteStream } from 'node:fs'
+import { basename } from 'node:path'
+import type { Readable, Writable } from 'node:stream'
 
 import { program } from 'commander'
 import OpenAI from 'openai'
@@ -27,22 +29,28 @@ program
       const { model } = opts
       const openai = new OpenAI()
 
-      const inStream = file === '-' ? process.stdin : createReadStream(file)
+      const inStream: Readable =
+        file === '-' ? process.stdin : createReadStream(file)
 
       let text = ''
       for await (const chunk of inStream) {
         text += String(chunk)
       }
 
-      const result = await textToIcs({
+      const { calendar } = await textToIcs({
         text,
         openai,
         model,
+        defaultTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       })
 
-      const outStream =
+      if (inStream !== process.stdin) {
+        calendar.name(basename(file))
+      }
+
+      const outStream: Writable =
         opts.output === '-' ? process.stdout : createWriteStream(opts.output)
-      outStream.end(result.ics)
+      outStream.write(calendar.toString() + '\n')
     },
   )
 
