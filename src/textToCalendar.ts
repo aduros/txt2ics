@@ -1,4 +1,4 @@
-import { ICalCalendar } from 'ical-generator'
+import { ICalCalendar, ICalCalendarMethod } from 'ical-generator'
 import { hash } from 'ohash'
 import { OpenAI } from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
@@ -114,6 +114,7 @@ export async function textToCalendar(
 
   const calendar = new ICalCalendar({
     prodId: 'txt2ics',
+    method: ICalCalendarMethod.PUBLISH,
     timezone: {
       name: null,
       generator: (tzName) => {
