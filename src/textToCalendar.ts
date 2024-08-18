@@ -116,7 +116,7 @@ export async function textToCalendar(
     prodId: 'txt2ics',
     method: ICalCalendarMethod.PUBLISH,
     timezone: {
-      name: null,
+      name: opts.defaultTimeZone ?? null,
       generator: (tzName) => {
         return validTimeZones.has(tzName)
           ? tzlib_get_ical_block(tzName)[0]
