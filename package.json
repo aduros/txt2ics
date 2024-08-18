@@ -54,5 +54,9 @@
   "peerDependencies": {
     "ical-generator": "^7.2.0",
     "openai": "^4.55.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aduros/txt2ics"
   }
 }
