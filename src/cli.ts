@@ -38,12 +38,15 @@ program
       const { calendar } = await textToCalendar({
         text,
         model,
-        defaultTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       })
 
       if (inStream !== process.stdin) {
         calendar.name(basename(file))
       }
+
+      // Some calendar software (Google Calendar) don't support floating times, so we need a default
+      // timezone otherwise those will be interpreted as UTC.
+      calendar.timezone(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
       const outStream: Writable =
         opts.output === '-' ? process.stdout : createWriteStream(opts.output)

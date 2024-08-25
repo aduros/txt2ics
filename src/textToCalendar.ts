@@ -1,11 +1,8 @@
 import { ICalCalendar, ICalCalendarMethod } from 'ical-generator'
+import moment from 'moment'
 import { hash } from 'ohash'
 import { OpenAI } from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
-import {
-  tzlib_get_ical_block,
-  tzlib_get_timezones,
-} from 'timezones-ical-library'
 import { z } from 'zod'
 
 export interface TextToCalendarOptions {
@@ -17,9 +14,6 @@ export interface TextToCalendarOptions {
 
   /** OpenAI client. */
   openai?: OpenAI
-
-  /** Default timezone to use for events. */
-  defaultTimeZone?: string
 }
 
 export interface TextToCalendarResult {
@@ -35,15 +29,24 @@ export interface TextToCalendarResult {
 export async function textToCalendar(
   opts: TextToCalendarOptions,
 ): Promise<TextToCalendarResult> {
+  // Lop off the timezone offset suffix for timestamps. GPT likes to add the timezone offset, but we
+  // already handle timezones in a separate response field
+  const dateTimeWithoutZone = z
+    .string()
+    .trim()
+    .transform((dateTime) => moment.utc(dateTime.replace(/(T.*)[+-].*$/, '$1')))
+
   const resultSchema = z.object({
     events: z.array(
       z.object({
-        title: z.string().describe('The title of the event'),
+        title: z.string().trim().describe('The title of the event'),
 
-        timeStart: z.string().describe('The starting datetime of the event'),
+        timeStart: dateTimeWithoutZone.describe(
+          'The starting datetime of the event',
+        ),
 
         timeEnd: z
-          .union([z.string(), z.null()])
+          .union([dateTimeWithoutZone, z.null()])
           .describe('If provided, the ending datetime of the event'),
 
         timeZone: z
@@ -63,15 +66,15 @@ export async function textToCalendar(
           ),
 
         description: z
-          .union([z.string(), z.null()])
+          .union([z.string().trim(), z.null()])
           .describe('Any extra information about the event'),
 
         location: z
-          .union([z.string(), z.null()])
+          .union([z.string().trim(), z.null()])
           .describe('The event location'),
 
         emoji: z
-          .union([z.string(), z.null()])
+          .union([z.string().trim(), z.null()])
           .describe('A single emoji that best describes this event'),
       }),
     ),
@@ -110,19 +113,9 @@ export async function textToCalendar(
     console.log(JSON.stringify(result, null, '  '))
   }
 
-  const validTimeZones = new Set(tzlib_get_timezones())
-
   const calendar = new ICalCalendar({
     prodId: 'txt2ics',
     method: ICalCalendarMethod.PUBLISH,
-    timezone: {
-      name: opts.defaultTimeZone ?? null,
-      generator: (tzName) => {
-        return validTimeZones.has(tzName)
-          ? tzlib_get_ical_block(tzName)[0]
-          : null
-      },
-    },
   })
 
   // The number of times we've processed each event, keyed by hash
@@ -145,7 +138,8 @@ export async function textToCalendar(
       location: event.location,
       repeating: event.recurrenceRule,
       allDay: event.allDay,
-      timezone: event.timeZone ?? opts.defaultTimeZone,
+      timezone: event.timeZone,
+      floating: !event.timeZone,
 
       // Use a fixed TSTAMP when running in Jest to keep things testable
       stamp: process.env.NODE_ENV === 'test' ? new Date(0) : undefined,
