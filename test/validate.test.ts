@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
+import { createOpenAI } from '@ai-sdk/openai'
 import { globSync } from 'glob'
 
 import { textToCalendar } from '../src'
@@ -14,7 +15,7 @@ describe.skip('Validate output', () => {
       const text = await readFile(`${__dirname}/${inputFile}`, 'utf8')
       const { calendar } = await textToCalendar({
         text,
-        model: 'gpt-4o-2024-08-06',
+        model: createOpenAI()('gpt-4o-2024-08-06'),
       })
       expect(calendar.toString()).toMatchSnapshot()
     },

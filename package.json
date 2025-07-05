@@ -46,14 +46,17 @@
     "version-bump-prompt": "^6.1.0"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^1.2.12",
+    "@ai-sdk/google": "^1.2.22",
+    "@ai-sdk/openai": "^1.3.22",
     "commander": "^12.1.0",
     "moment": "^2.30.1",
     "ohash": "^1.1.3",
     "zod": "^3.23.8"
   },
   "peerDependencies": {
-    "ical-generator": "^7.2.0",
-    "openai": "^4.55.4"
+    "ai": "^4.3.16",
+    "ical-generator": "^7.2.0"
   },
   "repository": {
     "type": "git",

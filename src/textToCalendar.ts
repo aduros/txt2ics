@@ -1,19 +1,16 @@
+import type { LanguageModelV1 } from 'ai'
+import { generateObject } from 'ai'
 import { ICalCalendar, ICalCalendarMethod } from 'ical-generator'
 import moment from 'moment'
 import { hash } from 'ohash'
-import { OpenAI } from 'openai'
-import { zodResponseFormat } from 'openai/helpers/zod'
 import { z } from 'zod'
 
 export interface TextToCalendarOptions {
   /** The source text. */
   text: string
 
-  /** OpenAI model. */
-  model: string
-
-  /** OpenAI client. */
-  openai?: OpenAI
+  /** The language model to use for generating calendar events. */
+  model: LanguageModelV1
 }
 
 export interface TextToCalendarResult {
@@ -80,8 +77,7 @@ export async function textToCalendar(
     ),
   })
 
-  const openai = opts.openai ?? new OpenAI()
-  const chatCompletion = await openai.beta.chat.completions.parse({
+  const { object: result } = await generateObject({
     model: opts.model,
     temperature: 0,
     seed: 0,
@@ -92,22 +88,11 @@ export async function textToCalendar(
       },
       {
         role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: opts.text,
-          },
-        ],
+        content: opts.text,
       },
     ],
-    response_format: zodResponseFormat(resultSchema, 'result'),
+    schema: resultSchema,
   })
-
-  const message = chatCompletion.choices[0].message
-  const result = message.parsed
-  if (!result) {
-    throw new Error(`Invalid response: ${message.refusal ?? 'unknown reason'}`)
-  }
 
   if (process.env.TXT2ICS_DEBUG) {
     console.log(JSON.stringify(result, null, '  '))
