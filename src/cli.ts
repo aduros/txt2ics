@@ -14,7 +14,7 @@ import { textToCalendar } from './textToCalendar'
 
 function getDefaultModel(): string {
   if (process.env.ANTHROPIC_API_KEY) {
-    return 'anthropic:claude-3-7-sonnet-latest'
+    return 'anthropic:claude-sonnet-4-6'
   }
   if (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY) {
     return 'google:gemini-2.5-pro'
