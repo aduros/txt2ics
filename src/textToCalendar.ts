@@ -1,4 +1,4 @@
-import type { LanguageModelV1 } from 'ai'
+import type { LanguageModel } from 'ai'
 import { generateObject } from 'ai'
 import { ICalCalendar, ICalCalendarMethod } from 'ical-generator'
 import moment from 'moment'
@@ -10,7 +10,7 @@ export interface TextToCalendarOptions {
   text: string
 
   /** The language model to use for generating calendar events. */
-  model: LanguageModelV1
+  model: LanguageModel
 }
 
 export interface TextToCalendarResult {
@@ -81,16 +81,8 @@ export async function textToCalendar(
     model: opts.model,
     temperature: 0,
     seed: 0,
-    messages: [
-      {
-        role: 'system',
-        content: 'Extract calendar events from the given text',
-      },
-      {
-        role: 'user',
-        content: opts.text,
-      },
-    ],
+    system: 'Extract calendar events from the given text',
+    prompt: opts.text,
     schema: resultSchema,
   })
 
